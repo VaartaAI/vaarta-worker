@@ -1,3 +1,4 @@
+import logging
 from config.settings import Settings
 from db.connection import DatabasePool
 from db.repositories.article_repository import ArticleRepository
@@ -9,28 +10,29 @@ from services.clustering_service import ClusteringService
 from services.summarization_service import SummarizationService
 from pipeline.ingestion_pipeline import IngestionPipeline
 
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S",
+)
+logger = logging.getLogger(__name__)
+
 
 def main():
-    print("[VaartaAI] Starting ingestion pipeline...\n")
+    logger.info("Starting VaartaAI ingestion pipeline")
 
-    # 1. Load config from .env
     settings = Settings.from_env()
-
-    # 2. DB connection pool (singleton)
     db_pool = DatabasePool(settings)
 
-    # 3. Repositories
     article_repo = ArticleRepository(db_pool)
     cluster_repo = ClusterRepository(db_pool)
     source_repo  = SourceRepository(db_pool)
     summary_repo = SummaryRepository(db_pool)
 
-    # 4. Services
     fetcher               = NewsAPIFetcher(settings)
     clustering_service    = ClusteringService(cluster_repo, settings)
     summarization_service = SummarizationService(article_repo, settings)
 
-    # 5. Wire up and run pipeline
     pipeline = IngestionPipeline(
         fetcher=fetcher,
         article_repo=article_repo,
@@ -43,9 +45,8 @@ def main():
 
     pipeline.run()
 
-    # 6. Clean up DB connections
     db_pool.close_all()
-    print("\n[VaartaAI] Pipeline complete.")
+    logger.info("Pipeline complete")
 
 
 if __name__ == "__main__":

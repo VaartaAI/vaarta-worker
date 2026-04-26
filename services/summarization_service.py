@@ -1,10 +1,13 @@
 from __future__ import annotations
 import json
+import logging
 from groq import Groq
 from models.article import Article
 from models.summary import Summary
 from db.repositories.article_repository import ArticleRepository
 from config.settings import Settings
+
+logger = logging.getLogger(__name__)
 
 
 class SummarizationService:
@@ -27,6 +30,7 @@ class SummarizationService:
             limit=self._max_articles
         )
         if not articles:
+            logger.warning("No articles found for cluster #%d", cluster_id)
             return None
 
         prompt = self._build_prompt(articles)
@@ -44,8 +48,11 @@ class SummarizationService:
             )
             raw = response.choices[0].message.content.strip()
             data = json.loads(raw)
-        except (Exception, json.JSONDecodeError) as e:
-            print(f"  [Summarizer] Failed for cluster #{cluster_id}: {e}")
+        except json.JSONDecodeError as e:
+            logger.error("Failed to parse Groq response for cluster #%d: %s", cluster_id, e)
+            return None
+        except Exception as e:
+            logger.error("Groq API error for cluster #%d: %s", cluster_id, e)
             return None
 
         return Summary(

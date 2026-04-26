@@ -1,3 +1,4 @@
+import logging
 import time
 from services.fetchers.base_fetcher import NewsFetcher
 from services.clustering_service import ClusteringService
@@ -5,6 +6,8 @@ from services.summarization_service import SummarizationService
 from db.repositories.article_repository import ArticleRepository
 from db.repositories.source_repository import SourceRepository
 from db.repositories.summary_repository import SummaryRepository
+
+logger = logging.getLogger(__name__)
 
 
 class IngestionPipeline:
@@ -31,42 +34,48 @@ class IngestionPipeline:
         new_cluster_ids = []
 
         for category in self._fetcher.supported_categories():
-            print(f"\n[Pipeline] Fetching: {category}")
+            logger.info("Fetching category: %s", category)
             articles = self._fetcher.fetch(category)
-            print(f"  Fetched {len(articles)} articles")
+            logger.info("Fetched %d articles for %s", len(articles), category)
 
             for article in articles:
-                # Step 1: Skip if already ingested
+                # Skip if already ingested
                 if self._article_repo.exists_by_url(article.url):
                     continue
 
-                # Step 2: Resolve source (find existing or create new)
+                # Resolve source
                 article.source = self._source_repo.find_or_create(article.source)
 
-                # Step 3: Find matching cluster or create new one
+                # Find matching cluster or create new
                 cluster, is_new = self._clustering_service.find_or_create_cluster(
                     article, category
                 )
                 article.cluster_id = cluster.id
 
-                # Step 4: Save article to DB
+                # Save article
                 self._article_repo.save(article)
-                print(f"  {'[NEW CLUSTER]' if is_new else '[ADDED TO]'} #{cluster.id}: {article.title[:70]}")
+                logger.info(
+                    "%s cluster #%d: %s",
+                    "[NEW CLUSTER]" if is_new else "[ADDED TO]",
+                    cluster.id,
+                    article.title[:70],
+                )
 
                 if is_new:
                     new_cluster_ids.append(cluster.id)
 
-        # Step 5: Summarize all new clusters with rate limiting
-        print(f"\n[Pipeline] Summarizing {len(new_cluster_ids)} new clusters...")
+        # Summarize all new clusters with rate limiting
+        logger.info("Summarizing %d new clusters...", len(new_cluster_ids))
         for i, cluster_id in enumerate(new_cluster_ids):
             summary = self._summarization_service.summarize(cluster_id)
             if summary:
                 self._summary_repo.save(summary)
-                print(f"  [SUMMARIZED] cluster #{cluster_id}")
+                logger.info("Summarized cluster #%d", cluster_id)
             else:
-                print(f"  [FAILED] cluster #{cluster_id}")
+                logger.warning("Failed to summarize cluster #%d", cluster_id)
+
             # Rate limit: stay under 15 requests/min on free tier
             if i < len(new_cluster_ids) - 1:
                 time.sleep(self._summarization_delay)
 
-        print(f"\n[Pipeline] Done. {len(new_cluster_ids)} new clusters created and summarized.")
+        logger.info("Done. %d new clusters created and summarized.", len(new_cluster_ids))

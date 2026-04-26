@@ -1,6 +1,10 @@
 from __future__ import annotations
+import logging
+from psycopg2 import DatabaseError
 from psycopg2.extras import RealDictCursor
 from db.connection import DatabasePool
+
+logger = logging.getLogger(__name__)
 
 
 class BaseRepository:
@@ -16,8 +20,13 @@ class BaseRepository:
                 conn.commit()
                 try:
                     return cur.fetchall()
-                except Exception:
+                except DatabaseError:
+                    # Query was not a SELECT (INSERT/UPDATE/DELETE with no RETURNING)
                     return []
+        except DatabaseError as e:
+            conn.rollback()
+            logger.error("Database error executing query: %s | params: %s | error: %s", query, params, e)
+            raise
         finally:
             self._pool.release_connection(conn)
 
