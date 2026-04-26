@@ -17,6 +17,8 @@ class Settings:
     max_articles_per_summary: int = 3
     groq_model: str = "llama-3.3-70b-versatile"
     summarization_delay_seconds: float = 2.0  # stay under 30 RPM free tier
+    groq_daily_token_budget: int = 90_000     # reserve 10k buffer from 100k/day limit
+    log_level: str = "INFO"
 
     @classmethod
     def from_env(cls) -> "Settings":
@@ -31,4 +33,6 @@ class Settings:
             max_articles_per_summary=int(os.getenv("MAX_ARTICLES_PER_SUMMARY", "3")),
             groq_model=os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile"),
             summarization_delay_seconds=float(os.getenv("SUMMARIZATION_DELAY", "2.0")),
+            groq_daily_token_budget=int(os.getenv("GROQ_DAILY_TOKEN_BUDGET", "90000")),
+            log_level=os.getenv("LOG_LEVEL", "INFO"),
         )

@@ -51,9 +51,8 @@ class SummarizationService:
         except json.JSONDecodeError as e:
             logger.error("Failed to parse Groq response for cluster #%d: %s", cluster_id, e)
             return None
-        except Exception as e:
-            logger.error("Groq API error for cluster #%d: %s", cluster_id, e)
-            return None
+        # Let Groq API exceptions (RateLimitError, APIError, etc.) propagate
+        # so the caller can apply retry / budget logic appropriately.
 
         return Summary(
             cluster_id=cluster_id,

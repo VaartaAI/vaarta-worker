@@ -52,6 +52,35 @@ class ClusterRepository(BaseRepository):
             (cluster_id,)
         )
 
+    def get_hot_clusters(
+        self,
+        lookback_hours: int = 48,
+        min_articles: int = 1,
+    ) -> list[ArticleCluster]:
+        """Return clusters created within the lookback window, ordered by article count."""
+        rows = self._execute(
+            """
+            SELECT id, category, article_count, importance_score, created_at
+            FROM article_clusters
+            WHERE created_at > NOW() - (%s * INTERVAL '1 hour')
+              AND article_count >= %s
+            ORDER BY article_count DESC
+            """,
+            (lookback_hours, min_articles),
+        )
+        return [self._row_to_cluster(row) for row in rows]
+
+    def update_importance_score(self, cluster_id: int, score: float) -> None:
+        """Persist a freshly computed importance score."""
+        self._execute(
+            """
+            UPDATE article_clusters
+            SET importance_score = %s, updated_at = NOW()
+            WHERE id = %s
+            """,
+            (score, cluster_id),
+        )
+
     def _row_to_cluster(self, row: dict) -> ArticleCluster:
         return ArticleCluster(
             id=row["id"],
