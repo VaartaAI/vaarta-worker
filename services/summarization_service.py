@@ -1,16 +1,22 @@
 from __future__ import annotations
 import json
 import logging
-from groq import Groq
+
 from models.article import Article
 from models.summary import Summary
 from db.repositories.article_repository import ArticleRepository
 from config.settings import Settings
+from infra.llm.base import LLMClient
 
 logger = logging.getLogger(__name__)
 
 
 class SummarizationService:
+    """
+    Builds the multi-source prompt and asks an LLMClient to produce a
+    structured JSON summary. Provider-agnostic — the worker injects whichever
+    LLMClient (Groq, Gemini, Fallback over both) it wants used.
+    """
 
     SYSTEM_PROMPT = (
         "You are a news summarizer for an Indian news app called VaartaAI. "
@@ -18,17 +24,18 @@ class SummarizationService:
         "Always respond in valid JSON only. No extra text outside the JSON."
     )
 
-    def __init__(self, article_repo: ArticleRepository, settings: Settings):
+    def __init__(
+        self,
+        article_repo: ArticleRepository,
+        settings: Settings,
+        llm: LLMClient,
+    ):
         self._article_repo = article_repo
         self._max_articles = settings.max_articles_per_summary
-        self._model = settings.groq_model
-        self._client = Groq(api_key=settings.groq_api_key)
+        self._llm = llm
 
     def summarize(self, cluster_id: int) -> Summary | None:
-        articles = self._article_repo.get_by_cluster(
-            cluster_id,
-            limit=self._max_articles
-        )
+        articles = self._article_repo.get_by_cluster(cluster_id, limit=self._max_articles)
         if not articles:
             logger.warning("No articles found for cluster #%d", cluster_id)
             return None
@@ -36,23 +43,12 @@ class SummarizationService:
         prompt = self._build_prompt(articles)
 
         try:
-            response = self._client.chat.completions.create(
-                model=self._model,
-                messages=[
-                    {"role": "system", "content": self.SYSTEM_PROMPT},
-                    {"role": "user", "content": prompt},
-                ],
-                temperature=0.3,
-                max_tokens=1024,
-                response_format={"type": "json_object"},
-            )
-            raw = response.choices[0].message.content.strip()
+            raw = self._llm.complete_json(self.SYSTEM_PROMPT, prompt, max_tokens=1024)
             data = json.loads(raw)
         except json.JSONDecodeError as e:
-            logger.error("Failed to parse Groq response for cluster #%d: %s", cluster_id, e)
+            logger.error("Failed to parse LLM response for cluster #%d: %s", cluster_id, e)
             return None
-        # Let Groq API exceptions (RateLimitError, APIError, etc.) propagate
-        # so the caller can apply retry / budget logic appropriately.
+        # Quota / API errors propagate so the caller can apply policy.
 
         return Summary(
             cluster_id=cluster_id,
