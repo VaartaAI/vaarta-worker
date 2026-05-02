@@ -1,18 +1,20 @@
 """
-Postgres-backed FIFO queue between ingestion and the LLM worker.
+Postgres-backed implementation of the Queue interface.
 
-Ingestion enqueues cluster ids; LLM workers claim them with
-SELECT ... FOR UPDATE SKIP LOCKED so multiple workers can run concurrently
-without ever picking the same row.
+Uses the `summarization_queue` table and SELECT ... FOR UPDATE SKIP LOCKED
+for atomic, multi-worker-safe claims. Multiple instances of the LLM worker
+can run concurrently against the same table without claim collisions.
 """
 from __future__ import annotations
+
 from db.repositories.base_repository import BaseRepository
+from infra.queue.base import Queue
 
 
-class QueueRepository(BaseRepository):
+class PostgresQueue(BaseRepository, Queue):
+    """Queue backed by the summarization_queue Postgres table."""
 
     def enqueue(self, cluster_id: int) -> None:
-        """Mark a cluster as needing summarization. No-op if already queued."""
         self._execute(
             """
             INSERT INTO summarization_queue (cluster_id)
@@ -23,12 +25,6 @@ class QueueRepository(BaseRepository):
         )
 
     def claim_one(self, max_attempts: int = 5) -> int | None:
-        """
-        Atomically pop one pending cluster, marking it in_progress.
-        Skips rows whose attempts counter has already reached max_attempts —
-        those need to be promoted to 'failed' by sweep_exhausted().
-        Returns the cluster id, or None if the queue has nothing actionable.
-        """
         row = self._execute_one(
             """
             UPDATE summarization_queue
@@ -67,7 +63,6 @@ class QueueRepository(BaseRepository):
         )
 
     def release(self, cluster_id: int) -> None:
-        """Return a claimed job to pending — for transient failures (daily quota, etc.)."""
         self._execute(
             """
             UPDATE summarization_queue
@@ -78,10 +73,6 @@ class QueueRepository(BaseRepository):
         )
 
     def release_stale(self, stuck_minutes: int = 30) -> int:
-        """
-        Reset in_progress rows whose worker died mid-run.
-        Call periodically from the LLM worker. Returns how many were released.
-        """
         rows = self._execute(
             """
             UPDATE summarization_queue
@@ -95,10 +86,6 @@ class QueueRepository(BaseRepository):
         return len(rows)
 
     def sweep_exhausted(self, max_attempts: int = 5) -> int:
-        """
-        Promote pending rows that have already burned their retry budget to 'failed'.
-        Returns how many were swept.
-        """
         rows = self._execute(
             """
             UPDATE summarization_queue

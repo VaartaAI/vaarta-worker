@@ -15,6 +15,9 @@ load_dotenv()
 from infra.logging_config import configure_logging  # noqa: E402
 configure_logging(level=os.getenv("LOG_LEVEL", "INFO"))
 
+from infra.observability import configure_observability  # noqa: E402
+configure_observability(service_name="vaarta-ingest")
+
 import structlog  # noqa: E402
 
 from config.settings import Settings  # noqa: E402
@@ -22,7 +25,8 @@ from db.connection import DatabasePool  # noqa: E402
 from db.repositories.article_repository import ArticleRepository  # noqa: E402
 from db.repositories.cluster_repository import ClusterRepository  # noqa: E402
 from db.repositories.source_repository import SourceRepository  # noqa: E402
-from db.repositories.queue_repository import QueueRepository  # noqa: E402
+from infra.queue import Queue, PostgresQueue  # noqa: E402
+from infra import metrics as m  # noqa: E402
 from services.clustering_service import ClusteringService  # noqa: E402
 from services.sources import build_sources  # noqa: E402
 
@@ -39,7 +43,7 @@ def run() -> None:
     article_repo = ArticleRepository(pool)
     cluster_repo = ClusterRepository(pool)
     source_repo = SourceRepository(pool)
-    queue_repo = QueueRepository(pool)
+    queue: Queue = PostgresQueue(pool)
     clustering = ClusteringService(cluster_repo, settings)
 
     sources = build_sources(SOURCES_YAML, settings)
@@ -58,6 +62,7 @@ def run() -> None:
             slog.error("fetch_failed", error=str(exc))
             continue
         slog.info("fetched", count=len(articles))
+        m.articles_fetched_total.add(len(articles), {"source": source.name})
 
         for article in articles:
             try:
@@ -68,9 +73,11 @@ def run() -> None:
                 article.cluster_id = cluster.id
                 article_repo.save(article)
                 articles_saved += 1
+                m.articles_saved_total.add(1, {"source": source.name})
                 if is_new:
                     new_clusters += 1
-                    queue_repo.enqueue(cluster.id)
+                    queue.enqueue(cluster.id)
+                    m.clusters_created_total.add(1, {"source": source.name})
                     slog.info("cluster_created", cluster_id=cluster.id, title=article.title[:80])
             except Exception as exc:
                 errors += 1

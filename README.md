@@ -117,12 +117,13 @@ vaarta-worker/
 │       ├── article_repository.py
 │       ├── cluster_repository.py
 │       ├── source_repository.py
-│       ├── summary_repository.py    # save() is summary + cluster.category in 1 tx
-│       └── queue_repository.py      # Postgres FIFO with SKIP LOCKED
+│       └── summary_repository.py    # save() is summary + cluster.category in 1 tx
 ├── infra/
 │   ├── logging_config.py
-│   ├── rate_limiter.py        # in-memory daily Groq token budget
-│   └── retry.py
+│   ├── retry.py
+│   ├── llm/                   # LLM provider interface + Groq/Gemini/Fallback
+│   ├── queue/                 # Queue interface + Postgres FIFO with SKIP LOCKED
+│   └── budget/                # TokenBudget interface + in-memory & Redis impls
 ├── models/                    # plain dataclasses
 └── migrations/
     └── 001_summarization_queue.sql

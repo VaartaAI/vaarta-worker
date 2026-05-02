@@ -1,7 +1,7 @@
 from __future__ import annotations
 from groq import Groq, RateLimitError
 
-from infra.llm.base import LLMClient, LLMQuotaExhausted
+from infra.llm.base import LLMClient, LLMQuotaExhausted, LLMResponse
 
 
 class GroqLLMClient(LLMClient):
@@ -12,7 +12,7 @@ class GroqLLMClient(LLMClient):
         self._client = Groq(api_key=api_key)
         self._model = model
 
-    def complete_json(self, system_prompt: str, user_prompt: str, max_tokens: int) -> str:
+    def complete_json(self, system_prompt: str, user_prompt: str, max_tokens: int) -> LLMResponse:
         try:
             response = self._client.chat.completions.create(
                 model=self._model,
@@ -29,4 +29,7 @@ class GroqLLMClient(LLMClient):
             if "tokens per day" in s or "tpd" in s or "requests per day" in s:
                 raise LLMQuotaExhausted(str(exc)) from exc
             raise
-        return (response.choices[0].message.content or "").strip()
+
+        text = (response.choices[0].message.content or "").strip()
+        tokens = getattr(getattr(response, "usage", None), "total_tokens", 0) or 0
+        return LLMResponse(text=text, tokens_used=int(tokens))

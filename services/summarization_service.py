@@ -43,8 +43,8 @@ class SummarizationService:
         prompt = self._build_prompt(articles)
 
         try:
-            raw = self._llm.complete_json(self.SYSTEM_PROMPT, prompt, max_tokens=1024)
-            data = json.loads(raw)
+            response = self._llm.complete_json(self.SYSTEM_PROMPT, prompt, max_tokens=1024)
+            data = json.loads(response.text)
         except json.JSONDecodeError as e:
             logger.error("Failed to parse LLM response for cluster #%d: %s", cluster_id, e)
             return None

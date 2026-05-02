@@ -15,6 +15,9 @@ load_dotenv()
 from infra.logging_config import configure_logging  # noqa: E402
 configure_logging(level=os.getenv("LOG_LEVEL", "INFO"))
 
+from infra.observability import configure_observability  # noqa: E402
+configure_observability(service_name="vaarta-migrate")
+
 import psycopg2  # noqa: E402
 import structlog  # noqa: E402
 

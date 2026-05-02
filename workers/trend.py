@@ -19,6 +19,9 @@ load_dotenv()
 from infra.logging_config import configure_logging  # noqa: E402
 configure_logging(level=os.getenv("LOG_LEVEL", "INFO"))
 
+from infra.observability import configure_observability  # noqa: E402
+configure_observability(service_name="vaarta-trend")
+
 import structlog  # noqa: E402
 
 from config.settings import Settings  # noqa: E402

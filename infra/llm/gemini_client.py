@@ -10,7 +10,7 @@ from __future__ import annotations
 from google import genai
 from google.genai import types
 
-from infra.llm.base import LLMClient, LLMQuotaExhausted
+from infra.llm.base import LLMClient, LLMQuotaExhausted, LLMResponse
 
 
 _QUOTA_INDICATORS = (
@@ -32,7 +32,7 @@ class GeminiLLMClient(LLMClient):
         self._client = genai.Client(api_key=api_key)
         self._model = model
 
-    def complete_json(self, system_prompt: str, user_prompt: str, max_tokens: int) -> str:
+    def complete_json(self, system_prompt: str, user_prompt: str, max_tokens: int) -> LLMResponse:
         try:
             response = self._client.models.generate_content(
                 model=self._model,
@@ -49,4 +49,8 @@ class GeminiLLMClient(LLMClient):
             if any(token in s for token in _QUOTA_INDICATORS):
                 raise LLMQuotaExhausted(str(exc)) from exc
             raise
-        return (response.text or "").strip()
+
+        text = (response.text or "").strip()
+        usage = getattr(response, "usage_metadata", None)
+        tokens = getattr(usage, "total_token_count", 0) or 0
+        return LLMResponse(text=text, tokens_used=int(tokens))

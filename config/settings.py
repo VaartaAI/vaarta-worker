@@ -39,6 +39,11 @@ class Settings:
     queue_stuck_minutes: int = 30              # in_progress rows older than this get released
     queue_max_attempts: int = 5                # after N transient failures, give up on a cluster
 
+    # Shared state (optional). When set, TokenBudget is Redis-backed so multiple
+    # LLM workers share one daily counter per provider. Empty = per-worker
+    # in-memory counters (only safe for a single worker).
+    redis_url: str = ""
+
     log_level: str = "INFO"
 
     @classmethod
@@ -61,5 +66,6 @@ class Settings:
             llm_worker_idle_seconds=int(os.getenv("LLM_WORKER_IDLE_SECONDS", "30")),
             queue_stuck_minutes=int(os.getenv("QUEUE_STUCK_MINUTES", "30")),
             queue_max_attempts=int(os.getenv("QUEUE_MAX_ATTEMPTS", "5")),
+            redis_url=os.getenv("REDIS_URL", ""),
             log_level=os.getenv("LOG_LEVEL", "INFO"),
         )
