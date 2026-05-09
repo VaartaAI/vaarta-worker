@@ -10,12 +10,17 @@ from pathlib import Path
 import yaml
 
 from config.settings import Settings
+from db.repositories.source_state_repository import SourceStateRepository
 from services.sources.base import NewsSource
 from services.sources.rss_source import RSSSource
 from services.sources.newsapi_source import NewsAPISource
 
 
-def build_sources(config_path: Path | str, settings: Settings) -> list[NewsSource]:
+def build_sources(
+    config_path: Path | str,
+    settings: Settings,
+    state_repo: SourceStateRepository | None = None,
+) -> list[NewsSource]:
     path = Path(config_path)
     with path.open("r", encoding="utf-8") as f:
         config = yaml.safe_load(f) or {}
@@ -28,13 +33,14 @@ def build_sources(config_path: Path | str, settings: Settings) -> list[NewsSourc
                 name=entry["name"],
                 url=entry["url"],
                 trust_score=int(entry.get("trust_score", 3)),
+                state_repo=state_repo,
             ))
         elif kind == "newsapi":
             sources.append(NewsAPISource(
                 category=entry["category"],
                 api_key=settings.newsapi_key,
-                country=settings.newsapi_country,
                 page_size=settings.newsapi_page_size,
+                state_repo=state_repo,
             ))
         else:
             raise ValueError(f"Unknown source type in {path}: {kind!r}")

@@ -25,6 +25,7 @@ from db.connection import DatabasePool  # noqa: E402
 from db.repositories.article_repository import ArticleRepository  # noqa: E402
 from db.repositories.cluster_repository import ClusterRepository  # noqa: E402
 from db.repositories.source_repository import SourceRepository  # noqa: E402
+from db.repositories.source_state_repository import SourceStateRepository  # noqa: E402
 from infra.queue import Queue, PostgresQueue  # noqa: E402
 from infra import metrics as m  # noqa: E402
 from services.clustering_service import ClusteringService  # noqa: E402
@@ -43,10 +44,11 @@ def run() -> None:
     article_repo = ArticleRepository(pool)
     cluster_repo = ClusterRepository(pool)
     source_repo = SourceRepository(pool)
+    state_repo = SourceStateRepository(pool)
     queue: Queue = PostgresQueue(pool)
     clustering = ClusteringService(cluster_repo, settings)
 
-    sources = build_sources(SOURCES_YAML, settings)
+    sources = build_sources(SOURCES_YAML, settings, state_repo)
     log.info("sources_loaded", count=len(sources))
 
     articles_saved = 0
