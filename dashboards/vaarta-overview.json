@@ -1,0 +1,507 @@
+{
+  "annotations": {"list": []},
+  "editable": true,
+  "graphTooltip": 1,
+  "id": null,
+  "uid": "vaarta-overview",
+  "title": "Vaarta — Worker Overview",
+  "tags": ["vaarta"],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "30s",
+  "time": {"from": "now-6h", "to": "now"},
+  "templating": {
+    "list": [
+      {
+        "name": "DS_LOKI",
+        "label": "Loki data source",
+        "type": "datasource",
+        "query": "loki",
+        "hide": 0,
+        "includeAll": false,
+        "multi": false,
+        "current": {},
+        "refresh": 1
+      },
+      {
+        "name": "DS_PROM",
+        "label": "Prometheus data source",
+        "type": "datasource",
+        "query": "prometheus",
+        "hide": 0,
+        "includeAll": false,
+        "multi": false,
+        "current": {},
+        "refresh": 1
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 100,
+      "type": "row",
+      "title": "Health snapshot",
+      "collapsed": false,
+      "gridPos": {"h": 1, "w": 24, "x": 0, "y": 0}
+    },
+    {
+      "id": 1,
+      "type": "stat",
+      "title": "Errors",
+      "description": "Total error-level events in the selected time range.",
+      "datasource": {"type": "loki", "uid": "${DS_LOKI}"},
+      "gridPos": {"h": 5, "w": 6, "x": 0, "y": 1},
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "thresholds"},
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"color": "green", "value": null},
+              {"color": "yellow", "value": 5},
+              {"color": "red", "value": 50}
+            ]
+          },
+          "unit": "short"
+        }
+      },
+      "options": {
+        "reduceOptions": {"calcs": ["sum"], "fields": "", "values": false},
+        "textMode": "auto", "colorMode": "value", "graphMode": "area", "orientation": "auto"
+      },
+      "targets": [
+        {
+          "datasource": {"type": "loki", "uid": "${DS_LOKI}"},
+          "expr": "sum(count_over_time({service_namespace=\"vaarta\"} | json | level=\"error\" [$__interval]))",
+          "queryType": "range",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "type": "stat",
+      "title": "Summaries created",
+      "description": "Total LLM summaries written.",
+      "datasource": {"type": "loki", "uid": "${DS_LOKI}"},
+      "gridPos": {"h": 5, "w": 6, "x": 6, "y": 1},
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "thresholds"},
+          "thresholds": {"mode": "absolute", "steps": [{"color": "blue", "value": null}]},
+          "unit": "short"
+        }
+      },
+      "options": {
+        "reduceOptions": {"calcs": ["sum"], "fields": "", "values": false},
+        "textMode": "auto", "colorMode": "value", "graphMode": "area"
+      },
+      "targets": [
+        {
+          "datasource": {"type": "loki", "uid": "${DS_LOKI}"},
+          "expr": "sum(count_over_time({service_name=\"vaarta-llm\"} | json | event=\"summarized\" [$__interval]))",
+          "queryType": "range",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "type": "stat",
+      "title": "New clusters",
+      "description": "Brand-new event clusters discovered by ingest.",
+      "datasource": {"type": "loki", "uid": "${DS_LOKI}"},
+      "gridPos": {"h": 5, "w": 6, "x": 12, "y": 1},
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "thresholds"},
+          "thresholds": {"mode": "absolute", "steps": [{"color": "purple", "value": null}]},
+          "unit": "short"
+        }
+      },
+      "options": {
+        "reduceOptions": {"calcs": ["sum"], "fields": "", "values": false},
+        "textMode": "auto", "colorMode": "value", "graphMode": "area"
+      },
+      "targets": [
+        {
+          "datasource": {"type": "loki", "uid": "${DS_LOKI}"},
+          "expr": "sum(count_over_time({service_name=\"vaarta-ingest\"} | json | event=\"cluster_created\" [$__interval]))",
+          "queryType": "range",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "type": "stat",
+      "title": "Provider fallbacks",
+      "description": "Times we fell back from one LLM to another (Groq exhausted, Gemini exhausted, etc.).",
+      "datasource": {"type": "loki", "uid": "${DS_LOKI}"},
+      "gridPos": {"h": 5, "w": 6, "x": 18, "y": 1},
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "thresholds"},
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"color": "green", "value": null},
+              {"color": "yellow", "value": 1},
+              {"color": "red", "value": 10}
+            ]
+          },
+          "unit": "short"
+        }
+      },
+      "options": {
+        "reduceOptions": {"calcs": ["sum"], "fields": "", "values": false},
+        "textMode": "auto", "colorMode": "value", "graphMode": "area"
+      },
+      "targets": [
+        {
+          "datasource": {"type": "loki", "uid": "${DS_LOKI}"},
+          "expr": "sum(count_over_time({service_name=\"vaarta-llm\"} | json | event=\"provider_exhausted\" [$__interval]))",
+          "queryType": "range",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 200,
+      "type": "row",
+      "title": "Throughput",
+      "collapsed": false,
+      "gridPos": {"h": 1, "w": 24, "x": 0, "y": 6}
+    },
+    {
+      "id": 5,
+      "type": "timeseries",
+      "title": "Log volume per worker",
+      "description": "Total log events per minute, broken out by worker. A flat line means a worker stopped emitting.",
+      "datasource": {"type": "loki", "uid": "${DS_LOKI}"},
+      "gridPos": {"h": 9, "w": 12, "x": 0, "y": 7},
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "palette-classic"},
+          "custom": {
+            "drawStyle": "line", "lineInterpolation": "smooth", "lineWidth": 2,
+            "fillOpacity": 10, "stacking": {"mode": "none"}, "showPoints": "never"
+          },
+          "unit": "short"
+        }
+      },
+      "options": {
+        "tooltip": {"mode": "multi", "sort": "desc"},
+        "legend": {"showLegend": true, "displayMode": "table", "placement": "bottom", "calcs": ["sum"]}
+      },
+      "targets": [
+        {
+          "datasource": {"type": "loki", "uid": "${DS_LOKI}"},
+          "expr": "sum by (service_name) (count_over_time({service_namespace=\"vaarta\"} [$__interval]))",
+          "queryType": "range",
+          "refId": "A",
+          "legendFormat": "{{service_name}}"
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "type": "timeseries",
+      "title": "Summaries per LLM provider",
+      "description": "Which provider (Groq vs Gemini) actually produced each summary.",
+      "datasource": {"type": "loki", "uid": "${DS_LOKI}"},
+      "gridPos": {"h": 9, "w": 12, "x": 12, "y": 7},
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "palette-classic"},
+          "custom": {
+            "drawStyle": "bars", "lineInterpolation": "linear", "lineWidth": 1,
+            "fillOpacity": 80, "stacking": {"mode": "normal"}, "showPoints": "never"
+          },
+          "unit": "short"
+        }
+      },
+      "options": {
+        "tooltip": {"mode": "multi", "sort": "desc"},
+        "legend": {"showLegend": true, "displayMode": "table", "placement": "bottom", "calcs": ["sum"]}
+      },
+      "targets": [
+        {
+          "datasource": {"type": "loki", "uid": "${DS_LOKI}"},
+          "expr": "sum by (provider) (count_over_time({service_name=\"vaarta-llm\"} | json | event=\"provider_used\" [$__interval]))",
+          "queryType": "range",
+          "refId": "A",
+          "legendFormat": "{{provider}}"
+        }
+      ]
+    },
+    {
+      "id": 300,
+      "type": "row",
+      "title": "Content & sources",
+      "collapsed": false,
+      "gridPos": {"h": 1, "w": 24, "x": 0, "y": 16}
+    },
+    {
+      "id": 7,
+      "type": "piechart",
+      "title": "Categories distribution",
+      "description": "How LLM categorized clusters in the time range.",
+      "datasource": {"type": "loki", "uid": "${DS_LOKI}"},
+      "gridPos": {"h": 9, "w": 12, "x": 0, "y": 17},
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "palette-classic"},
+          "unit": "short"
+        }
+      },
+      "options": {
+        "reduceOptions": {"calcs": ["sum"], "fields": "", "values": false},
+        "pieType": "donut",
+        "tooltip": {"mode": "single", "sort": "desc"},
+        "legend": {"displayMode": "table", "placement": "right", "values": ["value", "percent"]}
+      },
+      "targets": [
+        {
+          "datasource": {"type": "loki", "uid": "${DS_LOKI}"},
+          "expr": "sum by (category) (count_over_time({service_name=\"vaarta-llm\"} | json | event=\"summarized\" [$__interval]))",
+          "queryType": "range",
+          "refId": "A",
+          "legendFormat": "{{category}}"
+        }
+      ]
+    },
+    {
+      "id": 8,
+      "type": "bargauge",
+      "title": "Top sources by clusters created",
+      "description": "Which RSS / NewsAPI feeds are creating the most new clusters.",
+      "datasource": {"type": "loki", "uid": "${DS_LOKI}"},
+      "gridPos": {"h": 9, "w": 12, "x": 12, "y": 17},
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "thresholds"},
+          "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}]},
+          "unit": "short"
+        }
+      },
+      "options": {
+        "displayMode": "gradient",
+        "orientation": "horizontal",
+        "showUnfilled": true,
+        "valueMode": "color",
+        "reduceOptions": {"calcs": ["sum"], "fields": "", "values": false}
+      },
+      "targets": [
+        {
+          "datasource": {"type": "loki", "uid": "${DS_LOKI}"},
+          "expr": "topk(10, sum by (source) (count_over_time({service_name=\"vaarta-ingest\"} | json | event=\"cluster_created\" [$__interval])))",
+          "queryType": "range",
+          "refId": "A",
+          "legendFormat": "{{source}}"
+        }
+      ]
+    },
+    {
+      "id": 350,
+      "type": "row",
+      "title": "Performance & budget (Prometheus metrics)",
+      "collapsed": false,
+      "gridPos": {"h": 1, "w": 24, "x": 0, "y": 26}
+    },
+    {
+      "id": 11,
+      "type": "timeseries",
+      "title": "Queue depth (current)",
+      "description": "Pending and in-progress rows in summarization_queue. Sampled every 15s by the LLM worker.",
+      "datasource": {"type": "prometheus", "uid": "${DS_PROM}"},
+      "gridPos": {"h": 9, "w": 12, "x": 0, "y": 27},
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "palette-classic"},
+          "custom": {
+            "drawStyle": "line", "lineInterpolation": "stepAfter", "lineWidth": 2,
+            "fillOpacity": 30, "showPoints": "never", "stacking": {"mode": "none"}
+          },
+          "unit": "short"
+        }
+      },
+      "options": {
+        "tooltip": {"mode": "multi", "sort": "desc"},
+        "legend": {"showLegend": true, "displayMode": "table", "placement": "bottom", "calcs": ["last"]}
+      },
+      "targets": [
+        {
+          "datasource": {"type": "prometheus", "uid": "${DS_PROM}"},
+          "expr": "vaarta_queue_depth",
+          "refId": "A",
+          "legendFormat": "{{status}}"
+        }
+      ]
+    },
+    {
+      "id": 12,
+      "type": "timeseries",
+      "title": "LLM call latency (p50 / p95 / p99)",
+      "description": "Per-call latency of LLM API requests, broken out by provider. Spikes mean the upstream is slow.",
+      "datasource": {"type": "prometheus", "uid": "${DS_PROM}"},
+      "gridPos": {"h": 9, "w": 12, "x": 12, "y": 27},
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "palette-classic"},
+          "custom": {
+            "drawStyle": "line", "lineInterpolation": "smooth", "lineWidth": 2,
+            "fillOpacity": 5, "showPoints": "never"
+          },
+          "unit": "s"
+        }
+      },
+      "options": {
+        "tooltip": {"mode": "multi", "sort": "desc"},
+        "legend": {"showLegend": true, "displayMode": "table", "placement": "bottom", "calcs": ["max", "mean"]}
+      },
+      "targets": [
+        {
+          "datasource": {"type": "prometheus", "uid": "${DS_PROM}"},
+          "expr": "histogram_quantile(0.50, sum by (le, provider) (rate(vaarta_llm_latency_seconds_bucket[5m])))",
+          "refId": "A",
+          "legendFormat": "p50 {{provider}}"
+        },
+        {
+          "datasource": {"type": "prometheus", "uid": "${DS_PROM}"},
+          "expr": "histogram_quantile(0.95, sum by (le, provider) (rate(vaarta_llm_latency_seconds_bucket[5m])))",
+          "refId": "B",
+          "legendFormat": "p95 {{provider}}"
+        },
+        {
+          "datasource": {"type": "prometheus", "uid": "${DS_PROM}"},
+          "expr": "histogram_quantile(0.99, sum by (le, provider) (rate(vaarta_llm_latency_seconds_bucket[5m])))",
+          "refId": "C",
+          "legendFormat": "p99 {{provider}}"
+        }
+      ]
+    },
+    {
+      "id": 13,
+      "type": "timeseries",
+      "title": "Token budget (used vs remaining)",
+      "description": "Live snapshot of each provider's daily token budget. When `used` approaches the configured limit, expect fallback to the next provider.",
+      "datasource": {"type": "prometheus", "uid": "${DS_PROM}"},
+      "gridPos": {"h": 9, "w": 12, "x": 0, "y": 36},
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "palette-classic"},
+          "custom": {
+            "drawStyle": "line", "lineInterpolation": "stepAfter", "lineWidth": 2,
+            "fillOpacity": 20, "showPoints": "never"
+          },
+          "unit": "short"
+        }
+      },
+      "options": {
+        "tooltip": {"mode": "multi", "sort": "desc"},
+        "legend": {"showLegend": true, "displayMode": "table", "placement": "bottom", "calcs": ["last"]}
+      },
+      "targets": [
+        {
+          "datasource": {"type": "prometheus", "uid": "${DS_PROM}"},
+          "expr": "vaarta_budget_tokens",
+          "refId": "A",
+          "legendFormat": "{{provider}} {{kind}}"
+        }
+      ]
+    },
+    {
+      "id": 14,
+      "type": "timeseries",
+      "title": "Throughput rates (per minute)",
+      "description": "Summaries created, summary failures, and articles saved — averaged over a 5-min window.",
+      "datasource": {"type": "prometheus", "uid": "${DS_PROM}"},
+      "gridPos": {"h": 9, "w": 12, "x": 12, "y": 36},
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "palette-classic"},
+          "custom": {
+            "drawStyle": "bars", "lineWidth": 1,
+            "fillOpacity": 80, "stacking": {"mode": "none"}, "showPoints": "never"
+          },
+          "unit": "short"
+        }
+      },
+      "options": {
+        "tooltip": {"mode": "multi", "sort": "desc"},
+        "legend": {"showLegend": true, "displayMode": "table", "placement": "bottom", "calcs": ["sum"]}
+      },
+      "targets": [
+        {
+          "datasource": {"type": "prometheus", "uid": "${DS_PROM}"},
+          "expr": "sum(rate(vaarta_summaries_created_total[5m])) * 60",
+          "refId": "A",
+          "legendFormat": "summaries/min"
+        },
+        {
+          "datasource": {"type": "prometheus", "uid": "${DS_PROM}"},
+          "expr": "sum(rate(vaarta_summaries_failed_total[5m])) * 60",
+          "refId": "B",
+          "legendFormat": "failures/min"
+        },
+        {
+          "datasource": {"type": "prometheus", "uid": "${DS_PROM}"},
+          "expr": "sum(rate(vaarta_articles_saved_total[5m])) * 60",
+          "refId": "C",
+          "legendFormat": "articles saved/min"
+        }
+      ]
+    },
+    {
+      "id": 400,
+      "type": "row",
+      "title": "Errors & live tail",
+      "collapsed": false,
+      "gridPos": {"h": 1, "w": 24, "x": 0, "y": 45}
+    },
+    {
+      "id": 9,
+      "type": "logs",
+      "title": "Recent errors",
+      "description": "Newest first. Click a row to expand the JSON fields.",
+      "datasource": {"type": "loki", "uid": "${DS_LOKI}"},
+      "gridPos": {"h": 12, "w": 12, "x": 0, "y": 46},
+      "options": {
+        "showTime": true, "showLabels": false, "showCommonLabels": false,
+        "wrapLogMessage": true, "prettifyLogMessage": true,
+        "enableLogDetails": true, "dedupStrategy": "none", "sortOrder": "Descending"
+      },
+      "targets": [
+        {
+          "datasource": {"type": "loki", "uid": "${DS_LOKI}"},
+          "expr": "{service_namespace=\"vaarta\"} | json | level=\"error\"",
+          "queryType": "range",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 10,
+      "type": "logs",
+      "title": "Live tail — all workers",
+      "description": "Every event from every worker, newest first.",
+      "datasource": {"type": "loki", "uid": "${DS_LOKI}"},
+      "gridPos": {"h": 12, "w": 12, "x": 12, "y": 46},
+      "options": {
+        "showTime": true, "showLabels": false, "showCommonLabels": false,
+        "wrapLogMessage": true, "prettifyLogMessage": true,
+        "enableLogDetails": true, "dedupStrategy": "none", "sortOrder": "Descending"
+      },
+      "targets": [
+        {
+          "datasource": {"type": "loki", "uid": "${DS_LOKI}"},
+          "expr": "{service_namespace=\"vaarta\"}",
+          "queryType": "range",
+          "refId": "A"
+        }
+      ]
+    }
+  ]
+}

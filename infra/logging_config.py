@@ -23,11 +23,14 @@ def configure_logging(level: str = "INFO") -> None:
         processors=shared_processors + [structlog.processors.JSONRenderer()],
         wrapper_class=structlog.make_filtering_bound_logger(log_level),
         context_class=dict,
-        logger_factory=structlog.PrintLoggerFactory(file=sys.stdout),
+        # Route through stdlib so additional handlers (e.g. OTel LoggingHandler)
+        # see every structlog event too. The JSONRenderer above pre-renders the
+        # event, and stdlib's StreamHandler just prints %(message)s — so stdout
+        # shows the JSON unchanged, while extra handlers can ship it elsewhere.
+        logger_factory=structlog.stdlib.LoggerFactory(),
         cache_logger_on_first_use=True,
     )
 
-    # Route stdlib logging (used by third-party libs) through structlog
     logging.basicConfig(
         level=log_level,
         stream=sys.stdout,

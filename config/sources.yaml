@@ -1,0 +1,37 @@
+# Vaarta news sources. RSS is the primary path; NewsAPI is supplemental.
+# Adding a source is just adding an entry here — no code change needed.
+#
+# Verify each RSS URL after copying — publishers move feeds around. Replace
+# or remove any that 404. The registry only knows two `type`s today: rss
+# and newsapi (one entry per category for newsapi).
+
+sources:
+
+  # ── RSS feeds ─────────────────────────────────────────────────────────
+  - type: rss
+    name: "The Hindu"
+    url: https://www.thehindu.com/news/feeder/default.rss
+    trust_score: 4
+
+  - type: rss
+    name: "NDTV"
+    url: https://feeds.feedburner.com/NDTV-LatestNews
+    trust_score: 4
+
+  - type: rss
+    name: "Indian Express"
+    url: https://indianexpress.com/feed/
+    trust_score: 4
+
+  - type: rss
+    name: "Hindustan Times — India"
+    url: https://www.hindustantimes.com/feeds/rss/india-news/rssfeed.xml
+    trust_score: 4
+
+  # ── NewsAPI (one entry per category) ──────────────────────────────────
+  - type: newsapi
+    category: politics
+  - type: newsapi
+    category: business
+  - type: newsapi
+    category: tech
