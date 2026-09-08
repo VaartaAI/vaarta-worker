@@ -1,37 +1,39 @@
-# Vaarta news sources. RSS is the primary path; NewsAPI is supplemental.
+# Vaarta news sources. All RSS; every feed below honors HTTP conditional GET.
 # Adding a source is just adding an entry here — no code change needed.
 #
 # Verify each RSS URL after copying — publishers move feeds around. Replace
-# or remove any that 404. The registry only knows two `type`s today: rss
-# and newsapi (one entry per category for newsapi).
+# or remove any that 404. The registry only knows one `type` today: rss.
 
 sources:
 
   # ── RSS feeds ─────────────────────────────────────────────────────────
-  - type: rss
-    name: "The Hindu"
-    url: https://www.thehindu.com/news/feeder/default.rss
-    trust_score: 4
-
-  - type: rss
-    name: "NDTV"
-    url: https://feeds.feedburner.com/NDTV-LatestNews
-    trust_score: 4
-
   - type: rss
     name: "Indian Express"
     url: https://indianexpress.com/feed/
     trust_score: 4
 
   - type: rss
-    name: "Hindustan Times — India"
-    url: https://www.hindustantimes.com/feeds/rss/india-news/rssfeed.xml
+    name: "Times of India"
+    url: https://timesofindia.indiatimes.com/rssfeedstopstories.cms
+    trust_score: 3
+
+  - type: rss
+    name: "Economic Times"
+    url: https://economictimes.indiatimes.com/rssfeedstopstories.cms
     trust_score: 4
 
-  # ── NewsAPI (one entry per category) ──────────────────────────────────
-  - type: newsapi
-    category: politics
-  - type: newsapi
-    category: business
-  - type: newsapi
-    category: tech
+  - type: rss
+    name: "Bar and Bench"
+    url: https://www.barandbench.com/feed
+    trust_score: 4
+
+  # ── International ─────────────────────────────────────────────────────
+  - type: rss
+    name: "Al Jazeera"
+    url: https://www.aljazeera.com/xml/rss/all.xml
+    trust_score: 4
+
+  - type: rss
+    name: "Guardian — Business"
+    url: https://www.theguardian.com/business/rss
+    trust_score: 4
