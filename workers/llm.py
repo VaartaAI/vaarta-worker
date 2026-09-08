@@ -22,6 +22,7 @@ configure_logging(level=os.getenv("LOG_LEVEL", "INFO"))
 from infra.observability import configure_observability  # noqa: E402
 configure_observability(service_name="vaarta-llm")
 
+import psycopg2  # noqa: E402
 import structlog  # noqa: E402
 
 from config.settings import Settings  # noqa: E402
@@ -44,6 +45,22 @@ logger = structlog.get_logger(__name__)
 
 # Conservative estimate per call (prompt + completion).
 TOKENS_PER_CALL = 1_500
+
+# Backoff for Postgres connection errors in the main loop (seconds).
+DB_RETRY_BASE_SECONDS = 5
+DB_RETRY_MAX_SECONDS = 120
+
+
+def _release_safely(queue: Queue, cluster_id: int, clog) -> None:
+    """
+    Put a claimed row back to pending. If the database is unreachable at this
+    moment, don't let that crash the worker: the row stays in_progress and
+    release_stale() frees it once queue_stuck_minutes have passed.
+    """
+    try:
+        queue.release(cluster_id)
+    except psycopg2.Error as exc:
+        clog.warning("release_failed_db_error", err=str(exc).strip())
 
 
 def _build_llm(settings: Settings, log) -> FallbackLLMClient:
@@ -152,6 +169,7 @@ def run() -> None:
 
     log.info("worker_started", idle_sleep=idle_sleep, max_attempts=max_attempts)
 
+    db_failures = 0
     try:
         while True:
             if not llm.has_capacity():
@@ -159,14 +177,26 @@ def run() -> None:
                 time.sleep(idle_sleep)
                 continue
 
-            cluster_id = queue.claim_one(max_attempts=max_attempts)
-            if cluster_id is None:
-                released = queue.release_stale(stuck_minutes)
-                swept = queue.sweep_exhausted(max_attempts=max_attempts)
-                if released or swept:
-                    log.info("queue_maintenance", released=released, swept=swept)
-                time.sleep(idle_sleep)
+            try:
+                cluster_id = queue.claim_one(max_attempts=max_attempts)
+                if cluster_id is None:
+                    released = queue.release_stale(stuck_minutes)
+                    swept = queue.sweep_exhausted(max_attempts=max_attempts)
+                    if released or swept:
+                        log.info("queue_maintenance", released=released, swept=swept)
+                    time.sleep(idle_sleep)
+                    continue
+            except psycopg2.Error as exc:
+                # Postgres unreachable or the connection dropped (common with a
+                # remote Neon endpoint). The pool has already discarded the dead
+                # socket; back off and retry instead of crashing the daemon. Any
+                # row left in_progress is recovered by release_stale() later.
+                db_failures += 1
+                backoff = min(DB_RETRY_BASE_SECONDS * 2 ** (db_failures - 1), DB_RETRY_MAX_SECONDS)
+                log.warning("db_error_retrying", err=str(exc).strip(), failures=db_failures, sleep=backoff)
+                time.sleep(backoff)
                 continue
+            db_failures = 0
 
             clog = log.bind(cluster_id=cluster_id)
             try:
@@ -184,7 +214,7 @@ def run() -> None:
 
             except LLMQuotaExhausted as exc:
                 # All providers reported daily-quota exhausted. Release for tomorrow.
-                queue.release(cluster_id)
+                _release_safely(queue, cluster_id, clog)
                 m.summary_failures_total.add(1, {"reason": "quota_exhausted"})
                 clog.warning("all_quota_exhausted", err=str(exc))
                 time.sleep(idle_sleep)
@@ -193,7 +223,7 @@ def run() -> None:
             except Exception as exc:
                 # Unknown errors are usually transient (5xx, network blip, parse glitch).
                 # Release for retry — the queue's attempts counter caps total tries.
-                queue.release(cluster_id)
+                _release_safely(queue, cluster_id, clog)
                 m.summary_failures_total.add(1, {"reason": "transient"})
                 clog.warning("transient_failure_released", err=str(exc))
 

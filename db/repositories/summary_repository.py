@@ -1,7 +1,7 @@
 from __future__ import annotations
 import json
 import logging
-from psycopg2 import DatabaseError
+from psycopg2 import DatabaseError, InterfaceError, OperationalError
 from psycopg2.extras import RealDictCursor
 
 from models.summary import Summary
@@ -19,6 +19,7 @@ class SummaryRepository(BaseRepository):
         so we never end up with a saved summary and a NULL cluster category.
         """
         conn = self._pool.get_connection()
+        broken = False
         try:
             with conn.cursor(cursor_factory=RealDictCursor) as cur:
                 cur.execute(
@@ -63,11 +64,14 @@ class SummaryRepository(BaseRepository):
             summary.id = row["id"]
             return summary
         except DatabaseError as exc:
-            conn.rollback()
+            try:
+                conn.rollback()
+            except (OperationalError, InterfaceError):
+                broken = True
             logger.error("save_summary_failed cluster=%d error=%s", summary.cluster_id, exc)
             raise
         finally:
-            self._pool.release_connection(conn)
+            self._pool.release_connection(conn, broken=broken)
 
     def exists_for_cluster(self, cluster_id: int) -> bool:
         row = self._execute_one(
