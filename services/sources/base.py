@@ -1,5 +1,5 @@
 """
-Uniform interface for all news sources (RSS, NewsAPI, GNews, …).
+Uniform interface for all news sources (RSS, GNews, …).
 
 A NewsSource encapsulates *everything* about an origin: its URL, its
 auth, and its conversion of raw items into Article objects. The

@@ -13,7 +13,6 @@ from config.settings import Settings
 from db.repositories.source_state_repository import SourceStateRepository
 from services.sources.base import NewsSource
 from services.sources.rss_source import RSSSource
-from services.sources.newsapi_source import NewsAPISource
 
 
 def build_sources(
@@ -33,13 +32,6 @@ def build_sources(
                 name=entry["name"],
                 url=entry["url"],
                 trust_score=int(entry.get("trust_score", 3)),
-                state_repo=state_repo,
-            ))
-        elif kind == "newsapi":
-            sources.append(NewsAPISource(
-                category=entry["category"],
-                api_key=settings.newsapi_key,
-                page_size=settings.newsapi_page_size,
                 state_repo=state_repo,
             ))
         else:

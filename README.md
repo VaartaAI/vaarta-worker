@@ -22,7 +22,7 @@ News ingestion and summarization pipeline for Vaarta. Three independent workers 
 └──────────────────────┘
 ```
 
-Sources are configured in `config/sources.yaml`. RSS is the primary path; NewsAPI works as one source-per-category.
+Sources are configured in `config/sources.yaml`. All sources are RSS feeds.
 
 ## Setup
 
@@ -31,7 +31,7 @@ python3 -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt
 cp .env.example .env
-# Fill in DATABASE_URL and GROQ_API_KEY (and NEWSAPI_KEY if you keep newsapi entries in sources.yaml)
+# Fill in DATABASE_URL and GROQ_API_KEY and/or GEMINI_API_KEY
 ```
 
 Apply pending migrations:
@@ -91,7 +91,6 @@ You only need *one* of the keys to be set. With both, you get the full fallback.
 | `DATABASE_URL` | yes | Postgres connection string (Neon works) |
 | `GROQ_API_KEY` | one of the LLM keys | Groq API key |
 | `GEMINI_API_KEY` | one of the LLM keys | Google AI Studio key (Gemini fallback) |
-| `NEWSAPI_KEY`  | only if `sources.yaml` has `newsapi` entries | NewsAPI.org key |
 
 See `.env.example` for tunables.
 
