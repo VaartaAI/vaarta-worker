@@ -1,23 +1,15 @@
 from __future__ import annotations
-from dataclasses import dataclass
 from datetime import datetime
 from typing import Optional
 
 from db.repositories.base_repository import BaseRepository
-
-
-@dataclass
-class SourceState:
-    source_key: str
-    last_fetched_at: Optional[datetime] = None
-    last_etag: Optional[str] = None
-    last_modified: Optional[str] = None
+from models.source_state import SourceState
 
 
 class SourceStateRepository(BaseRepository):
     """
     Tiny key-value table keyed by source_key (e.g. 'rss:The Hindu',
-    'newsapi:business'). Sources read their cursor at the start of fetch()
+    'gnews:business'). Sources read their cursor at the start of fetch()
     and write it back after a successful call.
     """
 
@@ -46,7 +38,7 @@ class SourceStateRepository(BaseRepository):
         last_modified: Optional[str] = None,
     ) -> None:
         # COALESCE preserves untouched fields so callers can write subsets
-        # (RSS only updates etag/modified; NewsAPI only updates last_fetched_at).
+        # (RSS only updates etag/modified; cursor-based sources only update last_fetched_at).
         self._execute(
             """
             INSERT INTO source_state (source_key, last_fetched_at, last_etag, last_modified, updated_at)
