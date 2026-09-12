@@ -6,6 +6,7 @@ Usage:
     python main.py ingest   # one-shot: fetch -> dedupe -> cluster -> enqueue
     python main.py llm      # long-running: drain summarization queue
     python main.py trend    # one-shot: recompute cluster importance scores
+    python main.py backfill-embeddings  # one-shot: embed recent rows with embedding IS NULL
 
 Typical deployment:
     one-time / on schema changes:  python main.py migrate
@@ -33,6 +34,8 @@ def main() -> None:
         from workers.llm import run
     elif name == "trend":
         from workers.trend import run
+    elif name == "backfill-embeddings":
+        from workers.backfill_embeddings import run
     else:
         print(f"Unknown worker: {name!r}\n{USAGE}")
         sys.exit(1)

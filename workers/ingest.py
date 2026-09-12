@@ -30,6 +30,7 @@ from infra.queue import Queue, PostgresQueue  # noqa: E402
 from infra import metrics as m  # noqa: E402
 from services.clustering_service import ClusteringService  # noqa: E402
 from services.sources import build_sources  # noqa: E402
+from infra.embeddings import EmbeddingQuotaExhausted, build_embedder, embedding_text  # noqa: E402
 
 logger = structlog.get_logger(__name__)
 
@@ -47,6 +48,9 @@ def run() -> None:
     state_repo = SourceStateRepository(pool)
     queue: Queue = PostgresQueue(pool)
     clustering = ClusteringService(cluster_repo, settings)
+    embedder = build_embedder(settings)
+    log.info("embeddings", enabled=embedder is not None,
+             model=settings.embedding_model if embedder else None)
 
     sources = build_sources(SOURCES_YAML, settings, state_repo)
     log.info("sources_loaded", count=len(sources))
@@ -66,10 +70,44 @@ def run() -> None:
         slog.info("fetched", count=len(articles))
         m.articles_fetched_total.add(len(articles), {"source": source.name})
 
-        for article in articles:
+        # Dedupe against the database in one query. A changed feed still
+        # arrives in full (RSS has no "since" parameter), so on a typical run
+        # most entries are already stored; checking them one by one is the
+        # dominant cost against a remote Postgres.
+        try:
+            known_urls = article_repo.existing_urls([a.url for a in articles])
+        except Exception as exc:
+            errors += 1
+            slog.error("dedupe_lookup_failed", error=str(exc))
+            continue
+        new_articles: list = []
+        seen: set[str] = set(known_urls)
+        for a in articles:
+            if a.url in seen:          # already stored, or repeated within this feed
+                continue
+            seen.add(a.url)
+            new_articles.append(a)
+        slog.info("deduped", fetched=len(articles), new=len(new_articles))
+
+        # One embedding call for the whole feed. On failure, articles go
+        # through with embedding=None and clustering falls back to trigram.
+        if embedder is not None and new_articles:
             try:
-                if article_repo.exists_by_url(article.url):
-                    continue
+                vectors = embedder.embed(
+                    [embedding_text(a, settings.embedding_body_chars) for a in new_articles]
+                )
+                for a, v in zip(new_articles, vectors):
+                    a.embedding = v
+            except EmbeddingQuotaExhausted as exc:
+                # Daily cap hit: stop asking for the rest of this run. Articles
+                # still get clustered — by trigram — and get no embedding.
+                log.warning("embeddings_disabled_for_run", reason="daily_quota_exhausted", error=str(exc)[:160])
+                embedder = None
+            except Exception as exc:
+                slog.warning("embedding_failed_using_trigram", error=str(exc)[:200])
+
+        for article in new_articles:
+            try:
                 article.source = source_repo.find_or_create(article.source)
                 cluster, is_new = clustering.find_or_create_cluster(article)
                 article.cluster_id = cluster.id

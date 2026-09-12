@@ -40,6 +40,11 @@ clusters_created_total = _meter.create_counter(
     description="Brand-new event clusters discovered during ingest",
 )
 
+clusters_matched_total = _meter.create_counter(
+    "vaarta.clusters.matched",
+    description="Articles that joined an existing cluster, labelled by match method",
+)
+
 summaries_total = _meter.create_counter(
     "vaarta.summaries.created",
     description="Summaries successfully written to DB",

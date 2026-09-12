@@ -16,4 +16,5 @@ class Article:
     published_at: Optional[datetime] = None
     cluster_id: Optional[int] = None
     image_url: Optional[str] = None
+    embedding: Optional[list[float]] = None   # set during ingest; None = not embedded
     id: Optional[int] = None

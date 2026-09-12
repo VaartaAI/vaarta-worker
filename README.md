@@ -24,6 +24,59 @@ News ingestion and summarization pipeline for Vaarta. Three independent workers 
 
 Sources are configured in `config/sources.yaml`. All sources are RSS feeds.
 
+## Clustering
+
+Articles about the same event are grouped into a cluster; the LLM summarises
+the cluster, not individual articles. Matching runs in two stages:
+
+1. **Semantic** (default). Each new article gets a 384-dim `gemini-embedding-001`
+   vector of `title. <first 200 chars of body>` and is compared by cosine
+   similarity (pgvector `<=>`) against embedded articles in clusters from the
+   last `CLUSTER_LOOKBACK_HOURS`. It joins the nearest cluster when
+   `cosine >= CLUSTER_EMBEDDING_THRESHOLD` (0.85), or when
+   `cosine >= CLUSTER_HYBRID_EMBEDDING_THRESHOLD` (0.80) **and** the two titles'
+   trigram similarity `>= CLUSTER_HYBRID_TRIGRAM_THRESHOLD` (0.35).
+2. **Trigram** (fallback). pg_trgm `similarity(title, title) > CLUSTER_THRESHOLD`
+   (0.42). Used when the article has no embedding — API down, quota hit,
+   `CLUSTERING_USE_EMBEDDINGS=false` — or when no embedded neighbour exists yet.
+
+Embeddings are fetched once per feed per run (batched, 40 texts per call), so
+ingest never makes per-article embedding requests. Gemini free-tier quota for
+`gemini-embedding-001`, separate from the summarization model's bucket:
+
+| Quota | Limit | Notes |
+|---|---|---|
+| per minute | 100 texts | every text in a batch counts; rejected batches count too |
+| per day | **1000 texts** | quotaId `EmbedContentRequestsPerDay…-FreeTier`; resets midnight Pacific (07:00 UTC / 12:30 IST) |
+
+Steady state (~400–500 new articles/day) fits. Bulk backfills and repeated test
+runs do not — that is how the cap was found. Client behaviour:
+
+- per-minute 429 → wait a full 61 s window (the server's shorter `retryDelay`
+  collides with the rejected batch), retry up to 3× within
+  `EMBEDDING_MAX_WAIT_SECONDS`, else that feed falls back to trigram;
+- per-day 429 → raise `EmbeddingQuotaExhausted` immediately, no retries; ingest
+  logs `embeddings_disabled_for_run` once and clusters the rest of the run by
+  trigram. Those articles get `embedding = NULL` and are simply invisible to
+  the vector search later;
+- network blips / 5xx → 3 s, 6 s, 9 s retries.
+
+After enabling embeddings on an existing database, or after an outage, fill the
+gaps so recent articles have neighbours:
+
+```bash
+BACKFILL_HOURS=72 python main.py backfill-embeddings
+```
+
+Calibration (2026-09-12, 368 real articles, nearest-neighbour pairs): every
+pair at cosine >= 0.85 was the same event or the same running story; the
+closest unrelated pair scored 0.849, so do not lower that threshold. In the
+0.80–0.85 band, a trigram floor of 0.25 admitted five pairs and all five were
+false merges (e.g. a 1986 rail crash vs today's live blog); 0.35 admitted none.
+`cluster_joined` log lines carry `method`, `cosine` and `trigram` for every
+join — grep them periodically and re-tune if you see bad merges.
+
+
 ## Setup
 
 ```bash
@@ -49,6 +102,7 @@ python main.py migrate  # apply pending SQL migrations
 python main.py ingest   # fetch from sources, cluster, enqueue
 python main.py llm      # consume queue, summarize (run continuously)
 python main.py trend    # recompute importance scores
+python main.py backfill-embeddings  # embed recent rows missing a vector (one-off / after outage)
 ```
 
 Typical deployment:
@@ -105,10 +159,11 @@ vaarta-worker/
 ├── workers/
 │   ├── ingest.py              # one-shot: fetch -> cluster -> enqueue
 │   ├── llm.py                 # long-running: drain queue, summarize
-│   └── trend.py               # one-shot: rescore clusters
+│   ├── trend.py               # one-shot: rescore clusters
+│   └── backfill_embeddings.py # one-shot: embed rows with embedding IS NULL
 ├── services/
 │   ├── sources/               # NewsSource subclasses + registry
-│   ├── clustering_service.py  # title-similarity clustering (category-blind)
+│   ├── clustering_service.py  # embedding + trigram clustering (category-blind)
 │   └── summarization_service.py
 ├── db/
 │   ├── connection.py
@@ -121,6 +176,7 @@ vaarta-worker/
 │   ├── logging_config.py
 │   ├── retry.py
 │   ├── llm/                   # LLM provider interface + Groq/Gemini/Fallback
+│   ├── embeddings/            # EmbeddingClient interface + Gemini (paced to free-tier quota)
 │   ├── queue/                 # Queue interface + Postgres FIFO with SKIP LOCKED
 │   └── budget/                # TokenBudget interface + in-memory & Redis impls
 ├── models/                    # plain dataclasses

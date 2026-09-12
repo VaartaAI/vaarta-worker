@@ -1,6 +1,7 @@
 from __future__ import annotations
 from models.cluster import ArticleCluster
 from db.repositories.base_repository import BaseRepository
+from db.vector import to_pgvector
 
 
 class ClusterRepository(BaseRepository):
@@ -32,6 +33,38 @@ class ClusterRepository(BaseRepository):
             (title, lookback_hours, title, threshold),
         )
         return self._row_to_cluster(row) if row else None
+
+    def find_nearest_by_embedding(
+        self,
+        embedding: list[float],
+        title: str,
+        lookback_hours: int,
+    ) -> tuple[ArticleCluster, float, float] | None:
+        """
+        Nearest recent article by cosine distance on articles.embedding, with
+        its cluster and, for the hybrid guard, the trigram similarity of that
+        article's title to the new title. Returns (cluster, cosine, trigram)
+        or None when no embedded article exists in the window. Thresholding
+        is the caller's job.
+        """
+        vec = to_pgvector(embedding)
+        row = self._execute_one(
+            """
+            SELECT ac.id, ac.category, ac.article_count, ac.importance_score, ac.created_at,
+                   1 - (a.embedding <=> %s::vector) AS cosine_sim,
+                   similarity(a.title, %s)          AS trigram_sim
+            FROM articles a
+            JOIN article_clusters ac ON ac.id = a.cluster_id
+            WHERE a.embedding IS NOT NULL
+              AND ac.created_at > NOW() - (%s * INTERVAL '1 hour')
+            ORDER BY a.embedding <=> %s::vector
+            LIMIT 1
+            """,
+            (vec, title, lookback_hours, vec),
+        )
+        if not row:
+            return None
+        return self._row_to_cluster(row), float(row["cosine_sim"]), float(row["trigram_sim"] or 0.0)
 
     def create(self, cluster: ArticleCluster) -> ArticleCluster:
         """Create a cluster. category is typically NULL at creation time."""
